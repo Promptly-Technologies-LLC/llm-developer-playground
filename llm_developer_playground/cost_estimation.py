@@ -1,6 +1,8 @@
 import tiktoken
+from typing import Union
 
-
+# Define a list of OpenAI models, with descriptions, max tokens, and per-token costs
+# for prompts and completions for each model
 models = [
   {'completion_cost_per_token': '0.002 / 1000',
    'description': 'Most capable GPT-3.5 model and optimized for chat at 1/10th the cost of text-davinci-003. Will be updated with our latest model iteration.',
@@ -114,21 +116,50 @@ models = [
 ]
 
 
-def count_tokens(text: str, model: str) -> int:
+def count_tokens(text: Union[str, list], model: str) -> int:
     """
-    Counts the number of tokens in a text string using the encoding for a given LLM.
+    Counts the number of tokens in string or or chat messages list using the encoding
+    for a given LLM.
     """
 
     # Get the tokeniser corresponding to the model
-    enc = tiktoken.encoding_for_model(model)
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:
+        print("Warning: model not found. Using cl100k_base encoding.")
+        enc = tiktoken.get_encoding("cl100k_base")
 
-    # Encode the string
-    token_list: list = enc.encode(text)
+    if isinstance(text, str):
+        # Encode the string
+        token_list: list = enc.encode(text)
 
-    # Measure the length of token_list
-    token_length: int = len(token_list)
-
-    # Return the length of token_list
+        # Measure the length of token_list
+        token_length: int = len(token_list)
+    else:
+        # This code for counting chat message tokens is adapted from OpenAI Cookbook:
+        # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
+        if model == "gpt-3.5-turbo":
+            print("Warning: gpt-3.5-turbo may change over time. Calculating num tokens assuming gpt-3.5-turbo-0301.")
+            return count_tokens(text, model="gpt-3.5-turbo-0301")
+        elif model == "gpt-4":
+            print("Warning: gpt-4 may change over time. Calculating num tokens assuming gpt-4-0314.")
+            return count_tokens(text, model="gpt-4-0314")
+        elif model == "gpt-3.5-turbo-0301":
+            tokens_per_message = 4
+            tokens_per_name = -1
+        elif model == "gpt-4-0314":
+            tokens_per_message = 3
+            tokens_per_name = 1
+        else:
+            raise NotImplementedError(f"""count_tokens() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens.""")
+        token_length = 0
+        for message in text:
+            token_length += tokens_per_message
+            for key, value in message.items():
+                token_length += len(enc.encode(value))
+                if key == "name":
+                    token_length += tokens_per_name
+        token_length += 3
     return token_length
 
 
@@ -154,23 +185,99 @@ def calculate_cost(prompt: str, completion: str, model: str) -> float:
 
 
 if __name__ == "__main__":
-    import urllib3
     
-    # Read an example text file from the web
-    text = urllib3.PoolManager().request('GET', 'https://example-files.online-convert.com/document/txt/example.txt').data.decode('utf-8')
+    example_prompt = """
+        You are a helpful, pattern-following assistant that translates
+        corporate jargon into plain English. Translate the following:
+        New synergies will help drive top-line growth.
+        """
 
-    # Count number of characters in the text
-    character_count = len(text)
-    print("String length in characters: " + str(character_count))
+    # Count number of characters in the example_prompt
+    character_count = len(example_prompt)
+    print("Example prompt length in characters: " + str(character_count))
 
-    # Count number of tokens in the text using GPT4 encoding
-    token_count = count_tokens(text, "gpt-4")
-    print("String length in tokens: " + str(token_count))
+    # Count number of tokens in the example_prompt using GPT4 encoding
+    token_count = count_tokens(example_prompt, "gpt-4")
+    print("Example prompt length in tokens: " + str(token_count))
 
     # Measure the ratio of tokens to characters:
     tokens_to_characters_ratio = token_count / character_count
     print("Ratio of tokens to characters: " + str(tokens_to_characters_ratio))
 
-    # Estimate the cost of a hypothetical GPT4 completion the same length of the text
-    completion_cost = calculate_cost(text,text,"gpt-4")
+    # Estimate the cost of a hypothetical GPT4 completion the same length as the example_prompt
+    completion_cost = calculate_cost(example_prompt, example_prompt, "gpt-4")
     print("Cost of a GPT4 prompt + completion both this length: " + str(completion_cost))
+
+    # This example chat completion prompt is borrowed from OpenAI Cookbook: 
+    # https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
+    example_chat_prompt = [
+        {
+            "role": "system",
+            "content": "You are a helpful, pattern-following assistant that translates corporate jargon into plain English.",
+        },
+        {
+            "role": "system",
+            "name": "example_user",
+            "content": "New synergies will help drive top-line growth.",
+        },
+        {
+            "role": "system",
+            "name": "example_assistant",
+            "content": "Things working well together will increase revenue.",
+        },
+        {
+            "role": "system",
+            "name": "example_user",
+            "content": "Let's circle back when we have more bandwidth to touch base on opportunities for increased leverage.",
+        },
+        {
+            "role": "system",
+            "name": "example_assistant",
+            "content": "Let's talk later when we're less busy about how to do better.",
+        },
+        {
+            "role": "user",
+            "content": "This late pivot means we don't have time to boil the ocean for the client deliverable.",
+        }
+    ]
+
+    # Count number of characters in the example_chat_prompt (including JSON markup)
+    character_count = sum([len(str(message)) for message in example_chat_prompt])
+    print("Example chat prompt length in characters: " + str(character_count))
+
+    # Count number of tokens in the example_chat_prompt using GPT4 encoding
+    token_count = count_tokens(example_chat_prompt, "gpt-4")
+    print("Example chat prompt length in tokens: " + str(token_count))
+
+    # Measure the ratio of tokens to characters:
+    tokens_to_characters_ratio = token_count / character_count
+    print("Ratio of tokens to characters: " + str(tokens_to_characters_ratio))
+
+    # Estimate the cost of a hypothetical GPT4 completion the same length as the example_chat_prompt
+    completion_cost = calculate_cost(example_chat_prompt, example_chat_prompt, "gpt-4")
+    print("Cost of a GPT4 chat prompt + completion both this length: " + str(completion_cost))
+
+    # The above functions allow calculation of cost for hypothetical prompts/responses.
+    # However, if you're using langchain to make an actual API call, you can get the
+    # real cost from the callback after the API returns a response.
+    from langchain.llms import OpenAI
+    from langchain.callbacks import get_openai_callback
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    llm = OpenAI(model_name="text-davinci-002", n=2, best_of=2)
+
+    with get_openai_callback() as cb:
+        # Track token usage over multiple API calls
+        result = llm("Tell me a joke")
+        result2 = llm("Tell me a joke")
+        print(cb)
+
+        # Save cost to a variable of type float
+        cost = cb.total_cost
+        print(type(cost))
+    
+    # It is worth looking into the plumbing of how the langchain implementation works.
+    # Supposedly it is using the OpenAI API callback, so this info may be available w/o
+    # using langchain.
