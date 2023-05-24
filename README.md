@@ -5,5 +5,5 @@ This is intended as an experimental and educational repository for testing featu
 Topical coverage includes:
 
 - [Accessing a models list from the OpenAI API endpoint](https://github.com/chriscarrollsmith/llm-developer-playground/tree/main/llm_developer_playground/model_list.ipynb)
-- [Estimating token usage and usage cost](https://github.com/chriscarrollsmith/llm-developer-playground/tree/main/llm_developer_playground/cost_estimation.py)
+- [Estimating token usage and usage cost](https://github.com/chriscarrollsmith/llm-developer-playground/tree/main/llm_developer_playground/cost_estimation.ipynb)
 - [Tracking actual token usage and usage cost](https://github.com/chriscarrollsmith/llm-developer-playground/tree/main/llm_developer_playground/model_list.ipynb/cost_tracking.ipynb)
