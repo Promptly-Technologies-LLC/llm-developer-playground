@@ -10,5 +10,7 @@ python-dotenv = "*"
 openai = "*"
 pandas = "*"
 ipykernel = "*"
+pydantic = "*"
+asyncio = "*"
 
 [dev-packages]
